@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -20,6 +21,9 @@ type NozzleConfig struct {
 	TrafficControllerURL    string
 	DopplerEndpoint         string
 	FirehoseSubscriptionID  string
+	DataDogBaseURL          string
+	DataDogInputURL         string
+	DataDogSeriesURL        string
 	DataDogURL              string
 	DataDogAPIKey           string
 	HTTPProxyURL            string
@@ -59,7 +63,7 @@ func Parse(configPath string) (*NozzleConfig, error) {
 	overrideWithEnvVar("NOZZLE_CLIENT_SECRET", &config.ClientSecret)
 	overrideWithEnvVar("NOZZLE_TRAFFICCONTROLLERURL", &config.TrafficControllerURL)
 	overrideWithEnvVar("NOZZLE_FIREHOSESUBSCRIPTIONID", &config.FirehoseSubscriptionID)
-	overrideWithEnvVar("NOZZLE_DATADOGURL", &config.DataDogURL)
+	overrideWithEnvVar("NOZZLE_DATADOGURL", &config.DataDogInputURL)
 	overrideWithEnvVar("NOZZLE_DATADOGAPIKEY", &config.DataDogAPIKey)
 	overrideWithEnvVar("HTTP_PROXY", &config.HTTPProxyURL)
 	overrideWithEnvVar("HTTPS_PROXY", &config.HTTPSProxyURL)
@@ -86,6 +90,21 @@ func Parse(configPath string) (*NozzleConfig, error) {
 	}
 
 	overrideWithEnvInt("NOZZLE_NUM_WORKERS", &config.NumWorkers)
+
+	var datadogBaseURL string
+	var DataDogSeriesURL string
+
+	datadogBaseURL, err = getDatadogAPIURL(config.DataDogInputURL)
+	if err != nil {
+		return &config, err
+	}
+	config.DataDogBaseURL = datadogBaseURL
+	config.DataDogURL = datadogBaseURL
+	DataDogSeriesURL, err = getDatadogSeriesURL(datadogBaseURL)
+	if err != nil {
+		return &config, err
+	}
+	config.DataDogSeriesURL = DataDogSeriesURL
 
 	return &config, nil
 }
@@ -133,4 +152,26 @@ func overrideWithEnvBool(name string, value *bool) {
 func overrideWithEnvSliceStrings(name string, value *[]string) {
 	envValue := os.Getenv(name)
 	*value = strings.Split(envValue, ",")
+}
+
+func getDatadogAPIURL(apiurl string) (string, error) {
+	parsedURL, err := url.Parse(apiurl)
+	if err != nil {
+		return "", fmt.Errorf("Error parsing API URL: %v", err)
+	}
+	if parsedURL.EscapedPath() == "" {
+		return parsedURL.String(), nil
+	} else {
+		return fmt.Sprintf("%s://%s", parsedURL.Scheme, parsedURL.Hostname()), nil
+	}
+}
+
+func getDatadogSeriesURL(datadogAPIURL string) (string, error) {
+	parsedURL, err := url.Parse(datadogAPIURL)
+	// This should always be passed a proper URL. It's very unlikely this could ever happen.
+	if err != nil {
+		return "", fmt.Errorf("Error parsing API URL: %v", err)
+	}
+	parsedURL.Path = "/api/v1/series"
+	return parsedURL.String(), nil
 }
