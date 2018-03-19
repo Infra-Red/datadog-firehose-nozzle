@@ -57,6 +57,7 @@ func NewDatadogFirehoseNozzle(config *nozzleconfig.NozzleConfig, tokenFetcher Au
 		appMetrics:       config.AppMetrics,
 		stopper:          make(chan bool),
 		workersStopper:   make(chan bool),
+		postNow:          make(chan bool),
 	}
 }
 

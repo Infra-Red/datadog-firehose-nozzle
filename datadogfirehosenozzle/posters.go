@@ -42,6 +42,8 @@ func (d *DatadogFirehoseNozzle) postToDatadog() {
 			d.postToDatadog()
 		case <-d.stopper:
 			return
+		case <-d.workersStopper:
+			return
 		}
 	}
 }
