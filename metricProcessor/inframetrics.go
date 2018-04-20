@@ -52,6 +52,29 @@ func (p *Processor) ParseInfraMetric(envelope *events.Envelope) ([]metrics.Metri
 		MetricValue: &mVal,
 	})
 
+	if envelope.GetEventType() == events.Envelope_CounterEvent {
+		keyDelta := metrics.MetricKey{
+			EventType: envelope.GetEventType(),
+			Name:      getNameDelta(envelope),
+			TagsHash:  utils.HashTags(tags),
+		}
+
+		mValDelta := metrics.MetricValue{}
+		value := getValueDelta(envelope)
+
+		mValDelta.Host = host
+		mValDelta.Tags = tags
+		mValDelta.Points = append(mValDelta.Points, metrics.Point{
+			Timestamp: envelope.GetTimestamp() / int64(time.Second),
+			Value:     value,
+		})
+
+		metricsPackages = append(metricsPackages, metrics.MetricPackage{
+			MetricKey:   &keyDelta,
+			MetricValue: &mValDelta,
+		})
+	}
+
 	return metricsPackages, nil
 }
 
@@ -61,6 +84,20 @@ func getName(envelope *events.Envelope) string {
 		return envelope.GetValueMetric().GetName()
 	case events.Envelope_CounterEvent:
 		return envelope.GetCounterEvent().GetName()
+	default:
+		panic("Unknown event type")
+	}
+}
+
+func getNameDelta(envelope *events.Envelope) string {
+	base := getName(envelope)
+	return base + ".delta"
+}
+
+func getValueDelta(envelope *events.Envelope) float64 {
+	switch envelope.GetEventType() {
+	case events.Envelope_CounterEvent:
+		return float64(envelope.GetCounterEvent().GetDelta())
 	default:
 		panic("Unknown event type")
 	}
